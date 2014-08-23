@@ -27,14 +27,50 @@ public class Student {
     // =============================================================================================================================
     // DATA MEMBERS
     
+    /** The last name of the student. */
     private String  _lastName;
-    private String  _firstName;
-    private boolean _gender;
-    private boolean _spanish;
-    private int[]   _practiceRanks;
-    // private Location _home;
 
+    /** The first name of the student. */
+    private String  _firstName;
+
+    /**
+     * Whether the student is female (<code>true</code>) or male (<code>false</code>).
+     * @see _GENDER_MALE
+     * @see _GENDER_FEMALE
+     */
+    private boolean _isFemale;
+
+    /** Whether the student speaks Spanish capably. */
+    private boolean _speaksSpanish;
+
+    /**
+     * Among a set of possible practice types, a rank ordering of their desirability.  Each entry in the array correlates to one
+     * particular practice type (e.g., geriatrics, family practice); the value in an entry indicates its rank, where <code>1</code>
+     * is most desirable.
+     * @see _PEDIATRICIAN_INDEX
+     * @see _FAMILY_PRACTITIONER_INDEX
+     * @see _INTERNISTS_INDEX
+     * @see _GERIATRICIAN_INDEX
+     * @see _RURAL_SETTING_INDEX
+     * @see _SUBURBAN_SETTING_INDEX
+     * @see _URBAN_SETTING_INDEX
+     * @see _UNDERSERVED_INDEX
+     */
+    private int[]   _practiceRanks;
+
+    /** The location of the student's home. */
+    private String  _home;
+
+    /**
+     * Whether sufficient information for the fields above is provided to properly match this student with a <code>Preceptor</code>.
+     * @see Student.cross
+     */
+    private boolean _sufficientForMatching;
+
+    /** A constant that, when compared with <code>_isFemale</code>, indicates whether the student is male. */
     private static final boolean _GENDER_MALE   = false;
+
+    /** A constant that, when compared with <code>_isFemale</code>, indicates whether the student is female. */
     private static final boolean _GENDER_FEMALE = true;
 
     private static final int _LAST_NAME_INDEX           = 0;
@@ -70,7 +106,7 @@ public class Student {
 
     private static final double _RANKS_WEIGHT   = 0.5;
     private static final double _GENDER_WEIGHT  = 0.25;
-    private static final double _SPANISH_WEIGHT = 0.25;
+    private static final double _SPEAKSSPANISH_WEIGHT = 0.25;
 
     /**
      * A collection of case-insensitive strings that unambiguously indicate a male student.
@@ -120,12 +156,21 @@ public class Student {
 	    fields[i] = fields[i].trim();
 	}
 
-	// Parse the fields, constructing the profile of the student.
+	// Parse the fields, constructing the profile of the student.  If any one of the attempts to parse the given data is a
+	// fundamental failure, emit a warning message and record that insufficient information is available to match this student.
 	_lastName      = fields[_LAST_NAME_INDEX];
 	_firstName     = fields[_FIRST_NAME_INDEX];
-	_gender        = parseGender(fields[_GENDER_INDEX]);
-	_spanish       = parseLanguages(fields[_LANGUAGES_INDEX]);
-	_practiceRanks = parsePracticeRanks(Arrays.copyOfRange(fields, _BEGIN_PRACTICE_RANK_INDEX, _END_PRACTICE_RANK_INDEX));
+	try {
+	    _isFemale      = parseGender(fields[_GENDER_INDEX]);
+	    _speaksSpanish = parseLanguages(fields[_LANGUAGES_INDEX]);
+	    _practiceRanks = parsePracticeRanks(Arrays.copyOfRange(fields, _BEGIN_PRACTICE_RANK_INDEX, _END_PRACTICE_RANK_INDEX));
+	    _sufficientForMatching = true;
+	} catch (InsufficientDataException e) {
+	    Utility.warning("Unable to read complete profile from record for student {0}, {1}\n\tMESSAGE: {2}".format(_lastName,
+														      _firstName,
+														      e.getMessage()));
+	    _sufficientForMatching = false;
+	}
 
     } // Student()
     // =============================================================================================================================
@@ -145,30 +190,26 @@ public class Student {
 
     public double cross (Preceptor preceptor) {
 
-	if (Utility._debug >= 1) {
-	    System.err.printf("DEBUG: %30s to %30s\n", this.getName(), preceptor.getName());
-	}
+	Utility.debug(1, String.format("%30s to %30s\n", this.getName(), preceptor.getName()));
 
 	// The preceptor's mask should be crossed with the inverse of the ranking, since we are aiming for maximization.
 	double rankMatchQuality = 0.0;
 	for (int i = 0; i < _practiceRanks.length; i += 1) {
 	    double maskedValue = (_practiceRanks.length - _practiceRanks[i] + 1) * preceptor.getRankMask(i);
 	    rankMatchQuality += maskedValue;
-	    if (Utility._debug >= 2) {
-		System.err.printf("DEBUG:\t\t\trank[%d] has adjusted rank %d and mask %f = %f\n",
-				  i,
-				  _practiceRanks.length - _practiceRanks[i] + 1,
-				  preceptor.getRankMask(i),
-				  maskedValue);
-	    }
+	    Utility.debug(2, String.format("\t\trank[%d] has adjusted rank %d and mask %f = %f\n",
+					   i,
+					   _practiceRanks.length - _practiceRanks[i] + 1,
+					   preceptor.getRankMask(i),
+					   maskedValue));
 	}
 
 	// If there is no gender preference, then it's a good match.  If there is one and the gender does match, it's an even better
 	// match.
 	double genderMatchQuality = 0.0;
 	if (preceptor.hasGenderPreference()) {
-	    if ((preceptor.prefersFemale() && (_gender == _GENDER_FEMALE)) ||
-		(!preceptor.prefersFemale()) && (_gender == _GENDER_MALE)) {
+	    if ((preceptor.prefersFemale() && (_isFemale == _GENDER_FEMALE)) ||
+		(!preceptor.prefersFemale()) && (_isFemale == _GENDER_MALE)) {
 		genderMatchQuality = 1.0;
 	    }
 	} else {
@@ -178,7 +219,7 @@ public class Student {
 	// If spanish-speaking is not required, it's a good match.  If it is required and provided, it's an even better match.
 	double spanishMatchQuality = 0.0;
 	if (preceptor.prefersSpanish()) {
-	    if (_spanish) {
+	    if (_speaksSpanish) {
 		spanishMatchQuality = 1.0;
 	    }
 	} else {
@@ -188,15 +229,13 @@ public class Student {
 	// Combine them all with weights.
 	double matchQuality = ((rankMatchQuality    * _RANKS_WEIGHT) +
 			       (genderMatchQuality  * _GENDER_WEIGHT) +
-			       (spanishMatchQuality * _SPANISH_WEIGHT));
+			       (spanishMatchQuality * _SPEAKSSPANISH_WEIGHT));
 
-	if (Utility._debug >= 1) {
-	    System.err.printf("DEBUG:\t\trank = %5.4f\tgender = %5.4f\tspanish = %5.4f\toverall = %5.4f\n",
-			      rankMatchQuality,
-			      genderMatchQuality,
-			      spanishMatchQuality,
-			      matchQuality);
-	}
+	Utility.debug(1, String.format("\trank = %5.4f\tgender = %5.4f\tspanish = %5.4f\toverall = %5.4f\n",
+				       rankMatchQuality,
+				       genderMatchQuality,
+				       spanishMatchQuality,
+				       matchQuality));
 
 	return matchQuality;
     }
@@ -241,7 +280,7 @@ public class Student {
 	try {
 	    file.close();
 	} catch (IOException e) {
-	    System.err.println("WARNING: Student.read() failed upon closing path.  Continuing.");
+	    Utility.warning("Student.read() failed upon closing path.  Continuing.");
 	}
 	return students;
 		
@@ -258,13 +297,14 @@ public class Student {
      * @param genderText A case-insensitive string that represents the gender of the student.  Some effort is made to parse a number
      *                   of different yet unambiguous designations of gender; see the code to determine which are accepted.
      * @return <code>false</code> if the student is male, <code>true</code> if the student is female.
+     * @thrown InsufficientDataException when the <code>genderText</code> is not clearly an indication of male or female.
      * @see Student._MALE_TEXTS
      * @see Student._FEMALE_TEXTS
      * @see Student._GENDER_MALE
      * @see Student._GENDER_FEMALE
      */
 
-    private static boolean parseGender (String genderText) {
+    private static boolean parseGender (String genderText) throws InsufficientDataException {
 
 	// Does the text indicate a female?
 	for (String femaleText : _FEMALE_TEXTS) {
@@ -281,10 +321,7 @@ public class Student {
 	}
 
 	// If neither, something is wrong.
-	Utility.abort("Student.parseGender(): Unknown gender string = " + genderText);
-
-	// Dead code to placate the compiler.
-	throw new RuntimeException("Somehow reached dead code in Student.parseGender() on " + genderText);
+	throw new InsufficientDataException("Unable to parse gender: " + genderText);
 
     } // parseGender()
     // =============================================================================================================================
@@ -300,12 +337,19 @@ public class Student {
      * @param languagesText A string that indicates a student's proficiency in speaking Spanish.
      * @return <code>true</code> if this student is a capable Spanish speaker (according to <code>languagesText</code>;
      *         <code>false</code> otherwise.
+     * @throws InsufficientDataException when the <code>languagesText</code> does not indicate a clear <i>yes</i> or <i>no</i>.
      */
 
-    private static boolean parseLanguages (String languagesText) {
+    private static boolean parseLanguages (String languagesText) throws InsufficientDataException {
 
 	// Search for the existence of the substring "spanish" (case insensitive) to consider this student "spanish-capable".
-	return languagesText.equalsIgnoreCase("yes");
+	if (languagesText.equalsIgnoreCase("yes")) {
+	    return true;
+	} else if (languagesText.equalsIgnoreCase("no")) {
+	    return false;
+	} else {
+	    throw new InsufficientDataException("Unable to parse spanish-speaking capability: " + languagesText);
+	}
 
     } // parseLanguages()
     // =============================================================================================================================
@@ -320,9 +364,10 @@ public class Student {
      * @param practiceRanksText The textual representation of the sequence of ranks, one per rank-ordered field.
      * @return A sequence of integers that represent the rank ordering of each field, guaranteed to contain one unique rank per
      *         field.
+     * @throws InsufficientDataException when the collection of ranks is incorrect or incomplete.
      */
 
-    private static int[] parsePracticeRanks (String[] practiceRanksText) {
+    private static int[] parsePracticeRanks (String[] practiceRanksText) throws InsufficientDataException {
 
 	// Sanity check.
 	Utility.abortIfFalse(practiceRanksText.length == _numberPracticeFields,
@@ -348,20 +393,23 @@ public class Student {
 	    try {
 		practiceRanks[i] = Integer.parseInt(practiceRanksText[i]);
 	    } catch (NumberFormatException e) {
-		Utility.abort("Student.parsePracticeRanks(): Couldn't parse rank value " + practiceRanksText[i] + " at position " + i);
+		throw new InsufficientDataException("Couldn't parse rank value " +
+						    practiceRanksText[i] +
+						    " at position " +
+						    i);
 	    }
 	    if ((practiceRanks[i] < 1) || (practiceRanks[i] > _numberPracticeFields)) {
-		Utility.abort("Student.parsePracticeRanks(): Rank " + practiceRanks[i] + " at position " + i + " is out of range");
+		throw new InsufficientDataException("Rank " + practiceRanks[i] + " at position " + i + " is out of range");
 	    }
 	    int currentRank = practiceRanks[i];
 	    int rankPosition = currentRank - 1;
 	    if (ranksUsedPosition[rankPosition] != -1) {
-		Utility.abort("Student.parsePracticeRanks(): Rank " +
-			      currentRank +
-			      " used in both positions " +
-			      ranksUsedPosition[rankPosition] +
-			      " and " +
-			      i);
+		throw new InsufficientDataException("Rank " +
+						    currentRank +
+						    " used in both positions " +
+						    ranksUsedPosition[rankPosition] +
+						    " and " +
+						    i);
 	    }
 	    ranksUsedPosition[rankPosition] = i;
 	}
@@ -396,9 +444,9 @@ public class Student {
 		' ' +
 		_lastName +
 		":\t" +
-		(_gender ? "female" : "  male") +
+		(_isFemale ? "female" : "  male") +
 		", " +
-		(_spanish ? "    spanish speaking" : "non-spanish speaking"));
+		(_speaksSpanish ? "    spanish speaking" : "non-spanish speaking"));
 
     } // toString()
     // =============================================================================================================================

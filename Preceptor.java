@@ -113,12 +113,20 @@ public class Preceptor {
 	String languagesText        = fields[_LANGUAGES_INDEX];
 
 	// Construct a ranking mask from the information given.
-	_practiceRanks = parsePracticeRanks(practiceTypesText, practiceRegionText);
-	_genderPreference = parseGenderPreference(genderPreferenceText);
-	if (_genderPreference) {
-	    _prefersFemale = parseGender(genderPreferenceText);
+	try {
+	    _practiceRanks = parsePracticeRanks(practiceTypesText, practiceRegionText);
+	    _genderPreference = parseGenderPreference(genderPreferenceText);
+	    if (_genderPreference) {
+		_prefersFemale = parseGender(genderPreferenceText);
+	    }
+	    _spanishCapable = parseLanguage(languagesText);
+	    _sufficientForMatching = true;
+	} catch (InsufficientDataException e) {
+	    Utility.warning("Unable to read complete profile from record for preceptor {0}, {1}\n\tMESSAGE: {2}".format(_lastName,
+															_firstName,
+															e.getMessage()));
+	    _sufficientForMatching = false;
 	}
-	_spanishCapable = parseLanguage(languagesText);
 
 
     } // Preceptor
@@ -181,14 +189,20 @@ public class Preceptor {
      *                   made to parse a number of different yet unambiguous designations of gender; see the code to determine which
      *                   are accepted.
      * @return <code>false</code> if the preceptor has no preference, <code>true</code> if the preceptor does have a preference.
+     * @throws InsufficientDataException when the <code>genderText</code> contains neither a clear expression of a gender, nor a
+     *         clear expression of <i>no preference</i>.
      * @see Preceptor._MALE_TEXTS
      * @see Preceptor._FEMALE_TEXTS
      */
 
-    private static boolean parseGenderPreference (String genderText) {
+    private static boolean parseGenderPreference (String genderText) throws InsufficientDataException {
 
-	// Is the message obviously not for a preference?
-	if (genderText.matches("\\s*") || genderText.equalsIgnoreCase("none")) {
+	// Is the message blank?
+	if (genderText.matches("\\s*")) {
+	    throw new InsufficientDataException("Gender preference field is blank");
+	}
+
+	if (genderText.equalsIgnoreCase("none")) {
 	    return false;
 	}
 
@@ -207,11 +221,8 @@ public class Preceptor {
 	    }
 	}
 
-	// If neither, something is wrong.
-	Utility.abort("Preceptor.parseGenderPreference(): Preference expected, but no gender found in " + genderText);
-
-	// Dead code to placate the compiler.
-	throw new RuntimeException("Somehow reached dead code in Preceptor.parseGenderPreference() on " + genderText);
+	// If neither, this is not a sufficiently clear expression.
+	throw new InsufficientDataException("Preference expected, but no identifiable gender expressed: " + genderText);
 
     } // parseGenderPreference()
     // =============================================================================================================================
@@ -224,13 +235,14 @@ public class Preceptor {
      *
      * @param genderText An indication of the preferred gender.
      * @return <code>true</code> if the preferred gender is <i>female</i>; <code>false</code> if it is <i>male</i>
+     * @throws InsufficientDataException xxx
      * @see Preceptor._MALE_TEXTS
      * @see Preceptor._FEMALE_TEXTS
      * @see Preceptor._GENDER_MALE
      * @see Preceptor._GENDER_FEMALE
      */
     
-    private static boolean parseGender (String genderText) {
+    private static boolean parseGender (String genderText) throws InsufficientDataException {
 
 	// Does the text indicate a female?
 	genderText = genderText.toLowerCase();
