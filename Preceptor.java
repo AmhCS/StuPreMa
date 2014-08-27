@@ -29,16 +29,51 @@ public class Preceptor {
 
     // =============================================================================================================================
     // DATA MEMBERS
-    
-    private String   _lastName;
-    private String   _firstName;
-    private double[] _practiceRanks;
-    private boolean  _genderPreference;
-    private boolean  _prefersFemale;
-    private boolean  _spanishCapable;
-    // private Location _home;
 
+    /** The last name of the preceptor. */
+    private String   _lastName;
+
+    /** The first name of the preceptor. */
+    private String   _firstName;
+
+    /**
+     * A array of weights, used the mask the value of certain traits to this preceptor.
+     * @see Student._practiceRanks
+     */
+    private double[] _rankMask;
+
+    /** Whether this preceptor has any preference for one gender or the other. */
+    private boolean  _genderPreference;
+
+    /**
+     * If the preceptor has a preference, whether it for a female or a male.
+     * @see _GENDER_FEMALE
+     * @see _GENDER_MALE
+     */
+    private boolean  _prefersFemale;
+
+    /** Whether this preceptor needs a student who is capabale of interacting in Spanish. */
+    private boolean  _spanishCapable;
+
+    /** The location of a preceptor's practice. */
+    private String   _location;
+
+    /**
+     * Whether sufficient information for the fields above is provided to properly match this student with a <code>Preceptor</code>.
+     * @see Student.cross
+     */
+    private boolean _sufficientForMatching;
+
+    /**
+     * A boolean constant to represent a male.
+     * @see _prefersFemale
+     */
     private static final boolean _GENDER_MALE   = false;
+
+    /**
+     * A boolean constant to represent a female.
+     * @see _prefersFemale
+     */
     private static final boolean _GENDER_FEMALE = true;
 
     private static final int _LAST_NAME_INDEX           = 0;
@@ -114,7 +149,7 @@ public class Preceptor {
 
 	// Construct a ranking mask from the information given.
 	try {
-	    _practiceRanks = parsePracticeRanks(practiceTypesText, practiceRegionText);
+	    _rankMask = parsePracticeRanks(practiceTypesText, practiceRegionText);
 	    _genderPreference = parseGenderPreference(genderPreferenceText);
 	    if (_genderPreference) {
 		_prefersFemale = parseGender(genderPreferenceText);
@@ -231,11 +266,14 @@ public class Preceptor {
 
     // =============================================================================================================================
     /**
-     * Assuming that the given text does indicate some gender, figure out which one and return it.
+     * Assuming that the given text does indicate some gender, figure out which one and return it.  That assumption is based on a
+     * previous test performed by <code>parseGenderPreference</code>.
      *
      * @param genderText An indication of the preferred gender.
      * @return <code>true</code> if the preferred gender is <i>female</i>; <code>false</code> if it is <i>male</i>
-     * @throws InsufficientDataException xxx
+     * @throws InsufficientDataException when <code>genderText</code> does not indicate either <i>female</i> or <i>male</i> as a
+     *         choice of preferred gender.
+     * @see Preceptor.parseGenderPreference
      * @see Preceptor._MALE_TEXTS
      * @see Preceptor._FEMALE_TEXTS
      * @see Preceptor._GENDER_MALE
@@ -259,11 +297,8 @@ public class Preceptor {
 	    }
 	}
 
-	// If neither, something is wrong.
-	Utility.abort("Preceptor.parseGender(): Preference expected, but no gender found in " + genderText);
-
-	// Dead code to placate the compiler.
-	throw new RuntimeException("Somehow reached dead code in Preceptor.parseGenderPreference() on " + genderText);	
+	// If neither, this is not a sufficiently clear expression.
+	throw new InsufficientDataException("Specific gender expected, but no identifiable gender expressed: " + genderText);
 
     } // parseGender()
     // =============================================================================================================================
@@ -279,15 +314,19 @@ public class Preceptor {
      * @param languagesText A string that indicates the need for a student who is proficient in speaking Spanish.
      * @return <code>true</code> if the student should be a capable Spanish speaker (according to <code>languagesText</code>;
      *         <code>false</code> if the student need not be.
+     * @throws InsufficientDataException when a clear expression of <i>yes</i> or <i>no</i> is not provided in
+     *         <code>languagesText</code>.
      */
 
-    private static boolean parseLanguage (String languagesText) {
+    private static boolean parseLanguage (String languagesText) throws InsufficientDataException {
 
 	// Spanish needed is indicated as a Y/N.
 	if (languagesText.equalsIgnoreCase("y")) {
 	    return true;
-	} else {
+	} else if (languagesText.equalsIgnoreCase("n")) {
 	    return false;
+	} else {
+	    throw new InsufficientDataException("Expected y/n, but got neither in: " + languagesText);
 	}
 
     } // parseLanguages()
@@ -306,9 +345,13 @@ public class Preceptor {
      *        been in its own field, but it is combined here for now.)
      * @return An <i>array mask</i> that matches the ranking of a <code>Student</code> that, when crossed, yields the quality of the
      *         match.
+     * @throws InsufficientDataException when the various fields provided do not yield a clear indication of how to construct the
+     *         ranks mask.
      */
 
-    private static double[] parsePracticeRanks (String practiceTypesText, String practiceRegionText) {
+    private static double[] parsePracticeRanks (String practiceTypesText,
+						String practiceRegionText)
+	throws InsufficientDataException {
 
 	// Create a space to store the rank mask.
 	double[] rankMask = new double[Student._numberPracticeFields];
@@ -392,8 +435,18 @@ public class Preceptor {
 
 
     // =============================================================================================================================
+    public boolean pairable () {
+	return _sufficientForMatching;
+    }
+    // =============================================================================================================================
+
+
+
+    // =============================================================================================================================
     public String getName () {
+
 	return _lastName + ", " + _firstName;
+
     }
     // =============================================================================================================================
 
@@ -432,7 +485,7 @@ public class Preceptor {
 
     // =============================================================================================================================
     public double getRankMask (int position) {
-	return _practiceRanks[position];
+	return _rankMask[position];
     }
     // =============================================================================================================================
 

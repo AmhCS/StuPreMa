@@ -1,6 +1,7 @@
 // =================================================================================================================================
 // IMPORTS
 
+import java.util.ArrayList;
 import java.util.List;
 // =================================================================================================================================
 
@@ -40,15 +41,36 @@ public class Pairer {
 	String preceptorsPath          = args[1];
 	
 	// Create the data and operators.
-	List<Student>   students   = Student.read(studentsPath);
-	List<Preceptor> preceptors = Preceptor.read(preceptorsPath);
+	List<Student>   allStudents   = Student.read(studentsPath);
+	List<Preceptor> allPreceptors = Preceptor.read(preceptorsPath);
 		
+	// Cull the students and preceptors of those who cannot be matched (due to insufficient information).
+	List<Student> students = new ArrayList<Student>();
+	for (Student student : allStudents) {
+	    if (student.pairable()) {
+		students.add(student);
+	    } else {
+		Utility.warning("Removing student from matching matrix: " + student.getName());
+	    }
+	}
+
+	List<Preceptor> preceptors = new ArrayList<Preceptor>();
+	for (Preceptor preceptor : allPreceptors) {
+	    if (preceptor.pairable()) {
+		preceptors.add(preceptor);
+	    } else {
+		Utility.warning("Removing preceptor from matching matrix: " + preceptor.getName());
+	    }
+	}
+
 	// Make a cost matrix.
 	double[][] costs = new double[students.size()][preceptors.size()];
 	for (int i = 0; i < costs.length; i += 1) {
 	    for (int j = 0; j < costs[0].length; j += 1) {
+
 		// Because our matching algorithm seeks to minimize costs, we take the inverse to make lower scores better.
 		costs[i][j] = 1 / students.get(i).cross(preceptors.get(j));
+
 	    }
 	}
 

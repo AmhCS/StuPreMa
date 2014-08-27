@@ -55,6 +55,7 @@ public class Student {
      * @see _SUBURBAN_SETTING_INDEX
      * @see _URBAN_SETTING_INDEX
      * @see _UNDERSERVED_INDEX
+     * @see Preceptor._rankMask
      */
     private int[]   _practiceRanks;
 
@@ -190,18 +191,17 @@ public class Student {
 
     public double cross (Preceptor preceptor) {
 
-	Utility.debug(1, String.format("%30s to %30s\n", this.getName(), preceptor.getName()));
+	// Crossing should not have been requested unless the student and preceptor are pairable.
+	Utility.abortIfFalse(this.pairable() && preceptor.pairable(),
+			     String.format("Tried to pair unpairable student ({0}) and preceptor ({1})",
+					   this.getName(),
+					   preceptor.getName()));
 
 	// The preceptor's mask should be crossed with the inverse of the ranking, since we are aiming for maximization.
 	double rankMatchQuality = 0.0;
 	for (int i = 0; i < _practiceRanks.length; i += 1) {
 	    double maskedValue = (_practiceRanks.length - _practiceRanks[i] + 1) * preceptor.getRankMask(i);
 	    rankMatchQuality += maskedValue;
-	    Utility.debug(2, String.format("\t\trank[%d] has adjusted rank %d and mask %f = %f\n",
-					   i,
-					   _practiceRanks.length - _practiceRanks[i] + 1,
-					   preceptor.getRankMask(i),
-					   maskedValue));
 	}
 
 	// If there is no gender preference, then it's a good match.  If there is one and the gender does match, it's an even better
@@ -230,12 +230,6 @@ public class Student {
 	double matchQuality = ((rankMatchQuality    * _RANKS_WEIGHT) +
 			       (genderMatchQuality  * _GENDER_WEIGHT) +
 			       (spanishMatchQuality * _SPEAKSSPANISH_WEIGHT));
-
-	Utility.debug(1, String.format("\trank = %5.4f\tgender = %5.4f\tspanish = %5.4f\toverall = %5.4f\n",
-				       rankMatchQuality,
-				       genderMatchQuality,
-				       spanishMatchQuality,
-				       matchQuality));
 
 	return matchQuality;
     }
@@ -431,6 +425,14 @@ public class Student {
 
 
     // =============================================================================================================================
+    public boolean pairable () {
+	return _sufficientForMatching;
+    }
+    // =============================================================================================================================
+
+
+
+    // =============================================================================================================================
     /**
      * Generate a textual representation of this student.
      *
@@ -440,13 +442,16 @@ public class Student {
     public String toString () {
 
 	// Ranks not yet shown.
-	return (_firstName +
-		' ' +
-		_lastName +
-		":\t" +
-		(_isFemale ? "female" : "  male") +
-		", " +
-		(_speaksSpanish ? "    spanish speaking" : "non-spanish speaking"));
+	String result = _firstName + ' ' + _lastName + ":\t";
+	if (_sufficientForMatching) {
+	    result += ((_isFemale ? "female" : "  male") +
+		       ", " +
+		       (_speaksSpanish ? "    spanish speaking" : "non-spanish speaking"));
+	} else {
+	    result += "WARNING: Insufficient information provided.";
+	}
+
+	return result;
 
     } // toString()
     // =============================================================================================================================
