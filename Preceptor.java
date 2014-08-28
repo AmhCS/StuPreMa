@@ -58,6 +58,12 @@ public class Preceptor {
     /** The location of a preceptor's practice. */
     private String   _location;
 
+    /** The student with whom this preceptor has been pre-matched (if any). */
+    private String   _preMatch;
+
+    /** The <code>Student</code> to whom this student is matched (if any). */
+    private Student _student;
+
     /**
      * Whether sufficient information for the fields above is provided to properly match this student with a <code>Preceptor</code>.
      * @see Student.cross
@@ -86,7 +92,8 @@ public class Preceptor {
     private static final int _PREFERRED_DAY_INDEX       = 7;
     private static final int _SECONDARY_DAY_INDEX       = 8;
     private static final int _COMMENTS_INDEX            = 9;
-    private static final int _numberFields              = 10;
+    private static final int _PRE_MATCHED_INDEX         = 10;
+    private static final int _numberFields              = 11;
 
     /**
      * A collection of case-insensitive strings that unambiguously indicate a male student.
@@ -146,15 +153,17 @@ public class Preceptor {
 	String practiceRegionText   = fields[_PRACTICE_REGION_INDEX];
 	String genderPreferenceText = fields[_GENDER_PREFERENCE_INDEX];
 	String languagesText        = fields[_LANGUAGES_INDEX];
+	String preMatchText         = fields[_PRE_MATCHED_INDEX];
 
 	// Construct a ranking mask from the information given.
 	try {
-	    _rankMask = parsePracticeRanks(practiceTypesText, practiceRegionText);
-	    _genderPreference = parseGenderPreference(genderPreferenceText);
+	    _rankMask          = parsePracticeRanks(practiceTypesText, practiceRegionText);
+	    _genderPreference  = parseGenderPreference(genderPreferenceText);
 	    if (_genderPreference) {
 		_prefersFemale = parseGender(genderPreferenceText);
 	    }
-	    _spanishCapable = parseLanguage(languagesText);
+	    _spanishCapable    = parseLanguage(languagesText);
+	    _preMatch          = parsePreMatch(preMatchText);
 	    _sufficientForMatching = true;
 	} catch (InsufficientDataException e) {
 	    Utility.warning("Unable to read complete profile from record for preceptor {0}, {1}\n\tMESSAGE: {2}".format(_lastName,
@@ -435,6 +444,23 @@ public class Preceptor {
 
 
     // =============================================================================================================================
+    /**
+     * Parse the pre-match field to determine if this <code>Preceptor</code> is already matched to some <code>Student</code>.
+     *
+     * @param preMatchText The text of the pre-matched field in the record that defines this <code>Preceptor</code>.
+     * @return the given name of the student to whom this preceptor is matched, if given; <code>null</code> if the field is empty.
+     */
+    private String parsePreMatch (String preMatchText) {
+
+	// If there is anything here, assume that it's the name of a preceptor to whom this preceptor is pre-matched.
+	return (!preMatchText.equals("") ? preMatchText : null);
+
+    } // parsePreMatch()
+    // =============================================================================================================================
+
+
+
+    // =============================================================================================================================
     public boolean pairable () {
 	return _sufficientForMatching;
     }
@@ -510,6 +536,45 @@ public class Preceptor {
     // =============================================================================================================================
     public boolean prefersSpanish () {
 	return _spanishCapable;
+    }
+    // =============================================================================================================================
+
+
+
+    // =============================================================================================================================
+    public boolean hasPreMatch () {
+	return (_preMatch != null);
+    }
+    // =============================================================================================================================
+
+
+    // =============================================================================================================================
+    public String preMatch () {
+	return _preMatch;
+    }
+    // =============================================================================================================================
+
+
+
+    // =============================================================================================================================
+    public void match (Student student) {
+	_student = student;
+    }
+    // =============================================================================================================================
+
+
+
+    // =============================================================================================================================
+    public boolean matched () {
+	return (_student == null);
+    }
+    // =============================================================================================================================
+
+
+
+    // =============================================================================================================================
+    public Student getMatch () {
+	return _student;
     }
     // =============================================================================================================================
 

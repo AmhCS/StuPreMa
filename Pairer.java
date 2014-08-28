@@ -41,32 +41,64 @@ public class Pairer {
 	String preceptorsPath          = args[1];
 	
 	// Create the data and operators.
-	List<Student>   allStudents   = Student.read(studentsPath);
-	List<Preceptor> allPreceptors = Preceptor.read(preceptorsPath);
+	List<Student>   students   = Student.read(studentsPath);
+	List<Preceptor> preceptors = Preceptor.read(preceptorsPath);
 		
 	// Cull the students and preceptors of those who cannot be matched (due to insufficient information).
-	List<Student> students = new ArrayList<Student>();
-	for (Student student : allStudents) {
+	List<Student> filteredStudents = new ArrayList<Student>();
+	for (Student student : students) {
 	    if (student.pairable()) {
-		students.add(student);
+		filteredStudents.add(student);
 	    } else {
 		Utility.warning("Removing student from matching matrix: " + student.getName());
 	    }
 	}
+	students = filteredStudents;
 
-	List<Preceptor> preceptors = new ArrayList<Preceptor>();
-	for (Preceptor preceptor : allPreceptors) {
+	List<Preceptor> filteredPreceptors = new ArrayList<Preceptor>();
+	for (Preceptor preceptor : preceptors) {
 	    if (preceptor.pairable()) {
-		preceptors.add(preceptor);
+		filteredPreceptors.add(preceptor);
 	    } else {
 		Utility.warning("Removing preceptor from matching matrix: " + preceptor.getName());
 	    }
 	}
+	preceptors = filteredPreceptors;
+
+	// Cull the students and preceptors already matched to one another.  Verify that matching.
+	List<Student> preMatchedStudents = new ArrayList<Student>();
+	filteredStudents = new ArrayList<Student>();
+	for (Student student : students) {
+
+	    if (student.hasPreMatch()) {
+
+		for (Preceptor preceptor : preceptors) {
+		    if (preceptor.hasPreMatch() && student.preMatch().equals(preceptor.getName())) {
+			Utility.abortIfFalse(preceptor.hasPreMatch() && preceptor.preMatch().equals(student.getName()),
+					     "Student (" + student.getName() + ") matched to " + student.preMatch() +
+					     ", but preceptor does not match back.");
+			student.match(preceptor);
+			preceptors.remove(preceptor);
+			break;
+		    }
+		}
+		Utility.abortIfFalse(student.matched(), ("Student (" + student.getName() + ") prematched to " +
+							 student.preMatch() + ", but no such preceptor found."));
+
+	    } else {
+
+		// A non-pre-matched student is still in the running to be paired algorithmically.
+		filteredStudents.add(student);
+
+	    }
+
+	}
+	students = filteredStudents;
 
 	// Make a cost matrix.
 	double[][] costs = new double[students.size()][preceptors.size()];
-	for (int i = 0; i < costs.length; i += 1) {
-	    for (int j = 0; j < costs[0].length; j += 1) {
+	for (int i = 0; i < students.size(); i += 1) {
+	    for (int j = 0; j < preceptors.size(); j += 1) {
 
 		// Because our matching algorithm seeks to minimize costs, we take the inverse to make lower scores better.
 		costs[i][j] = 1 / students.get(i).cross(preceptors.get(j));
@@ -74,17 +106,36 @@ public class Pairer {
 	    }
 	}
 
-	// Match and emit the results.
+	// Pair remaining students to preceptors based on the results.
 	HungarianAlgorithm matcher = new HungarianAlgorithm(costs);
 	int[] matches = matcher.execute();
 	for (int i = 0; i < matches.length; i += 1) {
-	    String preceptorName = "None";
+
 	    if (matches[i] != -1) {
-		preceptorName = preceptors.get(matches[i]).getName();
+		Student student = students.get(i);
+		Preceptor preceptor = preceptors.get(matches[i]);
+		student.match(preceptor);
 	    }
-	    System.out.printf("%30s\t%30s\n", students.get(i).getName(), preceptorName);
+
 	}
-		
+
+	// Emit the pairings, printing first the pre-matched ones, and then the matched ones.
+	for (Student student : preMatchedStudents) {
+	    String studentName = student.getName();
+	    Utility.abortIfFalse(student.matched(), "In pre-matched list, unexpectedly unmatched student: " + studentName);
+	    String preceptorName = student.getMatch().getName();
+	    System.out.printf("[pre]%30s\t%30s\n", studentName, preceptorName);
+	}
+	for (Student student : students) {
+	    String studentName = student.getName();
+	    if (student.matched()) {
+		String preceptorName = student.getMatch().getName();
+		System.out.printf("[alg]%30s\t%30s\n", studentName, preceptorName);
+	    } else {
+		System.out.printf("[unm]%30s\tNone\n", studentName);
+	    }
+	}
+
     } // main
     // =============================================================================================================================
 

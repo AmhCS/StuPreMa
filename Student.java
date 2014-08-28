@@ -62,6 +62,12 @@ public class Student {
     /** The location of the student's home. */
     private String  _home;
 
+    /** The preceptor with whom this student has been pre-matched (if any). */
+    private String _preMatch;
+
+    /** The <code>Preceptor</code> to whom this student is matched (if any). */
+    private Preceptor _preceptor;
+
     /**
      * Whether sufficient information for the fields above is provided to properly match this student with a <code>Preceptor</code>.
      * @see Student.cross
@@ -88,7 +94,8 @@ public class Student {
     private static final int _LANGUAGES_INDEX           = 11;
     private static final int _LIVING_LOCATION_INDEX     = 12;
     private static final int _COMMENTS_INDEX            = 13;
-    private static final int _numberFields              = 14;
+    private static final int _PRE_MATCHED_INDEX         = 14;
+    private static final int _numberFields              = 15;
 
     private static final int _BEGIN_PRACTICE_RANK_INDEX = _PEDIATRICIAN_INDEX;
     private static final int _END_PRACTICE_RANK_INDEX   = _UNDERSERVED_INDEX + 1;
@@ -165,6 +172,7 @@ public class Student {
 	    _isFemale      = parseGender(fields[_GENDER_INDEX]);
 	    _speaksSpanish = parseLanguages(fields[_LANGUAGES_INDEX]);
 	    _practiceRanks = parsePracticeRanks(Arrays.copyOfRange(fields, _BEGIN_PRACTICE_RANK_INDEX, _END_PRACTICE_RANK_INDEX));
+	    _preMatch      = parsePreMatch(fields[_PRE_MATCHED_INDEX]);
 	    _sufficientForMatching = true;
 	} catch (InsufficientDataException e) {
 	    Utility.warning("Unable to read complete profile from record for student {0}, {1}\n\tMESSAGE: {2}".format(_lastName,
@@ -417,6 +425,23 @@ public class Student {
 
 
     // =============================================================================================================================
+    /**
+     * Parse the pre-match field to determine if this <code>Student</code> is already matched to some <code>Preceptor</code>.
+     *
+     * @param preMatchText The text of the pre-matched field in the record that defines this <code>Student</code>.
+     * @return the given name of the preceptor to whom this student is matched, if given; <code>null</code> if the field is empty.
+     */
+    private String parsePreMatch (String preMatchText) {
+
+	// If there is anything here, assume that it's the name of a preceptor to whom this student is pre-matched.
+	return (!preMatchText.equals("") ? preMatchText : null);
+
+    } // parsePreMatch()
+    // =============================================================================================================================
+
+
+
+    // =============================================================================================================================
     public String getName () {
 	return _lastName + ", " + _firstName;
     }
@@ -427,6 +452,45 @@ public class Student {
     // =============================================================================================================================
     public boolean pairable () {
 	return _sufficientForMatching;
+    }
+    // =============================================================================================================================
+
+
+
+    // =============================================================================================================================
+    public boolean hasPreMatch () {
+	return (_preMatch != null);
+    }
+    // =============================================================================================================================
+
+
+    // =============================================================================================================================
+    public String preMatch () {
+	return _preMatch;
+    }
+    // =============================================================================================================================
+
+
+
+    // =============================================================================================================================
+    public void match (Preceptor preceptor) {
+	_preceptor = preceptor;
+    }
+    // =============================================================================================================================
+
+
+
+    // =============================================================================================================================
+    public boolean matched () {
+	return (_preceptor == null);
+    }
+    // =============================================================================================================================
+
+
+
+    // =============================================================================================================================
+    public Preceptor getMatch () {
+	return _preceptor;
     }
     // =============================================================================================================================
 
