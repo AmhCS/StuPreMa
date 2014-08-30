@@ -189,6 +189,7 @@ public class Pairer {
 	//   3. Preceptor location
 	//   4. Practice type
 	//   5. Day of the week
+	System.out.printf("STUDENT NAME, MATCH TYPE, PRECEPTOR NAME, LOCATION, PRACTICE TYPE, MEETING DAY\n");
 	for (Student student : students) {
 	    String studentName = student.getName();
 	    String preceptorName;
@@ -209,12 +210,12 @@ public class Pairer {
 		dayOfWeek         = preceptor.preferredDay();
 	    } else {
 		matchType         = "unm";
-		preceptorName     = "---";
-		preceptorLocation = "---";
-		practiceType      = "---";
-		dayOfWeek         = "---";
+		preceptorName     = "None";
+		preceptorLocation = "N/A";
+		practiceType      = "N/A";
+		dayOfWeek         = "N/A";
 	    }
-	    System.out.printf("%s,%s,%s,%s,%s,%s\n",
+	    System.out.printf("\"%s\",%s,\"%s\",%s,%s,%s\n",
 			      studentName,
 			      matchType,
 			      preceptorName,
