@@ -58,6 +58,12 @@ public class Preceptor {
     /** The location of a preceptor's practice. */
     private String   _location;
 
+    /** The type of practice in which the preceptor works. */
+    private String   _practiceType;
+
+    /** The preferred day of the week for working with students. */
+    private String   _dayOfWeek;
+    
     /** The student with whom this preceptor has been pre-matched (if any). */
     private String   _preMatch;
 
@@ -144,20 +150,21 @@ public class Preceptor {
 	    fields[i] = fields[i].trim();
 	}
 		
-	// Parse the fields, constructing the profile of the student.  Ignore preferred days and comments, since we don't use them
-	// for matching right now.
+	// Parse the fields, constructing the profile of the student.  Ignore comments, since we don't use them for matching right
+	// now.
 	_lastName                   = fields[_LAST_NAME_INDEX];
 	_firstName                  = fields[_FIRST_NAME_INDEX];
-	String practiceTypesText    = fields[_PRACTICE_TYPES_INDEX];
-	String locationText         = fields[_LOCATION_INDEX];
+	_practiceType               = fields[_PRACTICE_TYPES_INDEX];
+	_location                   = fields[_LOCATION_INDEX];
 	String practiceRegionText   = fields[_PRACTICE_REGION_INDEX];
 	String genderPreferenceText = fields[_GENDER_PREFERENCE_INDEX];
 	String languagesText        = fields[_LANGUAGES_INDEX];
+	_dayOfWeek                  = fields[_PREFERRED_DAY_INDEX];
 	String preMatchText         = fields[_PRE_MATCHED_INDEX];
 
 	// Construct a ranking mask from the information given.
 	try {
-	    _rankMask          = parsePracticeRanks(practiceTypesText, practiceRegionText);
+	    _rankMask          = parsePracticeRanks(_practiceType, practiceRegionText);
 	    _genderPreference  = parseGenderPreference(genderPreferenceText);
 	    if (_genderPreference) {
 		_prefersFemale = parseGender(genderPreferenceText);
@@ -166,9 +173,10 @@ public class Preceptor {
 	    _preMatch          = parsePreMatch(preMatchText);
 	    _sufficientForMatching = true;
 	} catch (InsufficientDataException e) {
-	    Utility.warning("Unable to read complete profile from record for preceptor {0}, {1}\n\tMESSAGE: {2}".format(_lastName,
-															_firstName,
-															e.getMessage()));
+	    Utility.warning(String.format("Unable to read complete profile from record for preceptor %s, %s\n\tMESSAGE: %s",
+					  _lastName,
+					  _firstName,
+					  e.getMessage()));
 	    _sufficientForMatching = false;
 	}
 
@@ -469,10 +477,20 @@ public class Preceptor {
 
 
     // =============================================================================================================================
+    public String getName (boolean lastNameFirst) {
+	if (lastNameFirst) {
+	    return _lastName + ", " + _firstName;
+	} else {
+	    return _firstName + " " + _lastName;
+	}
+    }
+    // =============================================================================================================================
+
+
+
+    // =============================================================================================================================
     public String getName () {
-
-	return _lastName + ", " + _firstName;
-
+	return getName(true);
     }
     // =============================================================================================================================
 
@@ -542,10 +560,35 @@ public class Preceptor {
 
 
     // =============================================================================================================================
+    public String preferredDay () {
+	return _dayOfWeek;
+    }
+    // =============================================================================================================================
+
+
+
+    // =============================================================================================================================
+    public String location () {
+	return _location;
+    }
+    // =============================================================================================================================
+
+
+
+    // =============================================================================================================================
+    public String practiceType () {
+	return _practiceType;
+    }
+    // =============================================================================================================================
+
+
+
+    // =============================================================================================================================
     public boolean hasPreMatch () {
 	return (_preMatch != null);
     }
     // =============================================================================================================================
+
 
 
     // =============================================================================================================================

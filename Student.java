@@ -175,9 +175,10 @@ public class Student {
 	    _preMatch      = parsePreMatch(fields[_PRE_MATCHED_INDEX]);
 	    _sufficientForMatching = true;
 	} catch (InsufficientDataException e) {
-	    Utility.warning("Unable to read complete profile from record for student {0}, {1}\n\tMESSAGE: {2}".format(_lastName,
-														      _firstName,
-														      e.getMessage()));
+	    Utility.warning(String.format("Unable to read complete profile from record for student %s, %s\n\tMESSAGE: %s",
+					  _lastName,
+					  _firstName,
+					  e.getMessage()));
 	    _sufficientForMatching = false;
 	}
 
@@ -442,8 +443,20 @@ public class Student {
 
 
     // =============================================================================================================================
+    public String getName (boolean lastNameFirst) {
+	if (lastNameFirst) {
+	    return _lastName + ", " + _firstName;
+	} else {
+	    return _firstName + " " + _lastName;
+	}
+    }
+    // =============================================================================================================================
+
+
+
+    // =============================================================================================================================
     public String getName () {
-	return _lastName + ", " + _firstName;
+	return getName(true);
     }
     // =============================================================================================================================
 
@@ -482,7 +495,7 @@ public class Student {
 
     // =============================================================================================================================
     public boolean matched () {
-	return (_preceptor == null);
+	return (_preceptor != null);
     }
     // =============================================================================================================================
 

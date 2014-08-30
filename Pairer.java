@@ -32,13 +32,14 @@ public class Pairer {
     public static void main (String[] args) {
 
 	// Do we have the right number of arguments to work with?
-	if (args.length != 2) {
+	if (args.length != 3) {
 	    showUsageAndExit();
 	}
 	
 	// Name the arguments.
-	String studentsPath            = args[0];
-	String preceptorsPath          = args[1];
+	String studentsPath   = args[0];
+	String preceptorsPath = args[1];
+	String outputType     = args[2];
 	
 	// Create the data and operators.
 	List<Student>   students   = Student.read(studentsPath);
@@ -73,12 +74,14 @@ public class Pairer {
 	    if (student.hasPreMatch()) {
 
 		for (Preceptor preceptor : preceptors) {
-		    if (preceptor.hasPreMatch() && student.preMatch().equals(preceptor.getName())) {
-			Utility.abortIfFalse(preceptor.hasPreMatch() && preceptor.preMatch().equals(student.getName()),
+		    if (preceptor.hasPreMatch() && student.preMatch().equals(preceptor.getName(false))) {
+			// Should be a match; verify.
+			Utility.abortIfFalse(preceptor.preMatch().equals(student.getName(false)),
 					     "Student (" + student.getName() + ") matched to " + student.preMatch() +
-					     ", but preceptor does not match back.");
+					     ", but preceptor (" + preceptor.getName() + ") is matched to " + preceptor.preMatch());
 			student.match(preceptor);
 			preceptors.remove(preceptor);
+			preMatchedStudents.add(student);
 			break;
 		    }
 		}
@@ -119,24 +122,108 @@ public class Pairer {
 
 	}
 
-	// Emit the pairings, printing first the pre-matched ones, and then the matched ones.
-	for (Student student : preMatchedStudents) {
-	    String studentName = student.getName();
-	    Utility.abortIfFalse(student.matched(), "In pre-matched list, unexpectedly unmatched student: " + studentName);
-	    String preceptorName = student.getMatch().getName();
-	    System.out.printf("[pre]%30s\t%30s\n", studentName, preceptorName);
-	}
-	for (Student student : students) {
-	    String studentName = student.getName();
-	    if (student.matched()) {
-		String preceptorName = student.getMatch().getName();
-		System.out.printf("[alg]%30s\t%30s\n", studentName, preceptorName);
-	    } else {
-		System.out.printf("[unm]%30s\tNone\n", studentName);
-	    }
+	// Unify the lists of students and then emit their matching results.
+	students.addAll(preMatchedStudents);
+	if (outputType.equalsIgnoreCase("Readable")) {
+	    emitReadable(students);
+	} else if (outputType.equalsIgnoreCase("CSV")) {
+	    emitCSV(students);
+	} else {
+	    Utility.abort("Unknown output type:" + outputType);
 	}
 
-    } // main
+    } // main ()
+    // =============================================================================================================================
+
+
+
+    // =============================================================================================================================
+    /**
+     * Write (to <code>stdout</code>) the list of students and the preceptor to which each is matched.  Show whether each student is
+     * unpatched, pre-matched, or algorithmically matched.  The format written is meant for easy human reading.
+     *
+     * @param students The list of <code>Student</code>s, each of which has information on the <code>Preceptor</code> to whom a
+     *                 match was found (if any).
+     */
+    private static void emitReadable (List<Student> students) {
+
+	// Emit the pairings.
+	for (Student student : students) {
+	    String studentName = student.getName();
+	    String preceptorName;
+	    String matchType;
+	    if (student.matched()) {
+		if (student.hasPreMatch()) {
+		    matchType = "pre";
+		} else {
+		    matchType = "alg";
+		}
+		preceptorName = student.getMatch().getName();
+	    } else {
+		matchType = "unm";
+		preceptorName = "None";
+	    }
+	    System.out.printf("[%s]%40s\t%40s\n", matchType, studentName, preceptorName);
+	}
+
+    } // emitReadable ()
+    // =============================================================================================================================
+
+
+
+    // =============================================================================================================================
+    /**
+     * Write (to <code>stdout</code>) the list of students and the preceptor to which each is matched.  Show whether each student is
+     * unpatched, pre-matched, or algorithmically matched.  The format written is a comma-delimited CSV file, intended to be
+     * imported into a spreadsheet application.
+     *
+     * @param students The list of <code>Student</code>s, each of which has information on the <code>Preceptor</code> to whom a
+     *                 match was found (if any).
+     */
+    private static void emitCSV (List<Student> students) {
+
+	// Emit the pairings, showing the following fields for each:
+	//   0. Student name
+	//   1. Match type (pre/alg/unm)
+	//   2. Preceptor name
+	//   3. Preceptor location
+	//   4. Practice type
+	//   5. Day of the week
+	for (Student student : students) {
+	    String studentName = student.getName();
+	    String preceptorName;
+	    String preceptorLocation;
+	    String practiceType;
+	    String dayOfWeek;
+	    String matchType;
+	    if (student.matched()) {
+		Preceptor preceptor = student.getMatch();
+		if (student.hasPreMatch()) {
+		    matchType     = "pre";
+		} else {
+		    matchType     = "alg";
+		}	
+		preceptorName     = preceptor.getName();
+		preceptorLocation = preceptor.location();
+		practiceType      = preceptor.practiceType();
+		dayOfWeek         = preceptor.preferredDay();
+	    } else {
+		matchType         = "unm";
+		preceptorName     = "---";
+		preceptorLocation = "---";
+		practiceType      = "---";
+		dayOfWeek         = "---";
+	    }
+	    System.out.printf("%s,%s,%s,%s,%s,%s\n",
+			      studentName,
+			      matchType,
+			      preceptorName,
+			      preceptorLocation,
+			      practiceType,
+			      dayOfWeek);
+	}
+
+    } // emitCSV ()
     // =============================================================================================================================
 
 
@@ -151,10 +238,11 @@ public class Pairer {
     private static void showUsageAndExit () {
 
 	System.err.printf("USAGE: java Pairer <student list pathname>\n" +
-			  "                   <preceptor list pathname>\n");
+			  "                   <preceptor list pathname>\n" +
+			  "                   <output format [Readable|CSV]>\n");
 	System.exit(1);
 
-    } // showUsageAndExit
+    } // showUsageAndExit ()
     // =============================================================================================================================
 
 
