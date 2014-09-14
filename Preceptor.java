@@ -180,6 +180,12 @@ public class Preceptor {
 	    _sufficientForMatching = false;
 	}
 
+	// Pre-match parsing is special because it can trump an otherwise insufficient record.  So, we want to process this field
+	// irrespective of the success in having parsed the other fields.
+	_preMatch          = parsePreMatch(preMatchText);
+	if (_preMatch != null) {
+	    _sufficientForMatching = true;
+	}
 
     } // Preceptor
     // =============================================================================================================================

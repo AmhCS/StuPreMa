@@ -174,7 +174,7 @@ public class Pairer {
     // =============================================================================================================================
     /**
      * Write (to <code>stdout</code>) the list of students and the preceptor to which each is matched.  Show whether each student is
-     * unpatched, pre-matched, or algorithmically matched.  The format written is a comma-delimited CSV file, intended to be
+     * unpatched, pre-matched, or algorithmically matched.  The format written is a semicolon-delimited CSV file, intended to be
      * imported into a spreadsheet application.
      *
      * @param students The list of <code>Student</code>s, each of which has information on the <code>Preceptor</code> to whom a
@@ -189,7 +189,7 @@ public class Pairer {
 	//   3. Preceptor location
 	//   4. Practice type
 	//   5. Day of the week
-	System.out.printf("STUDENT NAME, MATCH TYPE, PRECEPTOR NAME, LOCATION, PRACTICE TYPE, MEETING DAY\n");
+	System.out.printf("STUDENT NAME;MATCH TYPE;PRECEPTOR NAME;LOCATION;PRACTICE TYPE;MEETING DAY\n");
 	for (Student student : students) {
 	    String studentName = student.getName();
 	    String preceptorName;
@@ -215,7 +215,7 @@ public class Pairer {
 		practiceType      = "N/A";
 		dayOfWeek         = "N/A";
 	    }
-	    System.out.printf("\"%s\",%s,\"%s\",%s,%s,%s\n",
+	    System.out.printf("\"%s\";%s;\"%s\";%s;%s;%s\n",
 			      studentName,
 			      matchType,
 			      preceptorName,
