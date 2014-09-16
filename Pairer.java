@@ -79,7 +79,7 @@ public class Pairer {
 			Utility.abortIfFalse(preceptor.preMatch().equals(student.getName(false)),
 					     "Student (" + student.getName() + ") matched to " + student.preMatch() +
 					     ", but preceptor (" + preceptor.getName() + ") is matched to " + preceptor.preMatch());
-			student.match(preceptor);
+			student.match(preceptor, 0.0);
 			preceptors.remove(preceptor);
 			preMatchedStudents.add(student);
 			break;
@@ -104,7 +104,8 @@ public class Pairer {
 	    for (int j = 0; j < preceptors.size(); j += 1) {
 
 		// Because our matching algorithm seeks to minimize costs, we take the inverse to make lower scores better.
-		costs[i][j] = 1 / students.get(i).cross(preceptors.get(j));
+		double crossResult = students.get(i).cross(preceptors.get(j));
+		costs[i][j] = 1 / crossResult;
 
 	    }
 	}
@@ -117,7 +118,8 @@ public class Pairer {
 	    if (matches[i] != -1) {
 		Student student = students.get(i);
 		Preceptor preceptor = preceptors.get(matches[i]);
-		student.match(preceptor);
+		double matchQuality = costs[i][matches[i]];
+		student.match(preceptor, matchQuality);
 	    }
 
 	}
@@ -163,7 +165,7 @@ public class Pairer {
 		matchType = "unm";
 		preceptorName = "None";
 	    }
-	    System.out.printf("[%s]%40s\t%40s\n", matchType, studentName, preceptorName);
+	    System.out.printf("[%s]%40s\t%40s\t%2.4f\n", matchType, studentName, preceptorName, student.getMatchQuality());
 	}
 
     } // emitReadable ()
@@ -189,7 +191,8 @@ public class Pairer {
 	//   3. Preceptor location
 	//   4. Practice type
 	//   5. Day of the week
-	System.out.printf("STUDENT NAME;MATCH TYPE;PRECEPTOR NAME;LOCATION;PRACTICE TYPE;MEETING DAY\n");
+	//   6. Match quality
+	System.out.printf("STUDENT NAME;MATCH TYPE;PRECEPTOR NAME;LOCATION;PRACTICE TYPE;MEETING DAY;MATCH QUALITY\n");
 	for (Student student : students) {
 	    String studentName = student.getName();
 	    String preceptorName;
@@ -215,13 +218,14 @@ public class Pairer {
 		practiceType      = "N/A";
 		dayOfWeek         = "N/A";
 	    }
-	    System.out.printf("\"%s\";%s;\"%s\";%s;%s;%s\n",
+	    System.out.printf("\"%s\";%s;\"%s\";%s;%s;%s;%.4f\n",
 			      studentName,
 			      matchType,
 			      preceptorName,
 			      preceptorLocation,
 			      practiceType,
-			      dayOfWeek);
+			      dayOfWeek,
+			      student.getMatchQuality());
 	}
 
     } // emitCSV ()

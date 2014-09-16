@@ -51,22 +51,33 @@ public class Student {
      * @see _FAMILY_PRACTITIONER_INDEX
      * @see _INTERNISTS_INDEX
      * @see _GERIATRICIAN_INDEX
+     * @see Preceptor._rankMask
+     */
+    private int[]   _practiceRanks;
+
+    /**
+     * Among a set of possible location settings, a rank ordering of their desirability.  Each entry in the array correlates to one
+     * particular practice setting (e.g., rural, urban); the value in an entry indicates its rank where <code>1</code> is most
+     * desirable.
      * @see _RURAL_SETTING_INDEX
      * @see _SUBURBAN_SETTING_INDEX
      * @see _URBAN_SETTING_INDEX
      * @see _UNDERSERVED_INDEX
-     * @see Preceptor._rankMask
      */
-    private int[]   _practiceRanks;
+    private int[]   _settingRanks;
+
 
     /** The location of the student's home. */
     private String  _home;
 
     /** The preceptor with whom this student has been pre-matched (if any). */
-    private String _preMatch;
+     private String _preMatch;
 
     /** The <code>Preceptor</code> to whom this student is matched (if any). */
     private Preceptor _preceptor;
+
+    /** The quality of the match with the chosen preceptor (if there was an algorithmic match). */
+    private double _matchQuality;
 
     /**
      * Whether sufficient information for the fields above is provided to properly match this student with a <code>Preceptor</code>.
@@ -98,7 +109,9 @@ public class Student {
     private static final int _numberFields              = 15;
 
     private static final int _BEGIN_PRACTICE_RANK_INDEX = _PEDIATRICIAN_INDEX;
-    private static final int _END_PRACTICE_RANK_INDEX   = _UNDERSERVED_INDEX + 1;
+    private static final int _END_PRACTICE_RANK_INDEX   = _GERIATRICIAN_INDEX + 1;
+    private static final int _BEGIN_SETTING_RANK_INDEX  = _RURAL_SETTING_INDEX;
+    private static final int _END_SETTING_RANK_INDEX    = _UNDERSERVED_INDEX + 1;
 
     // These are public because they need to be used by the Preceptor class as well.  SFHK: Ideally, it seems clear that the ranking
     // vectors and masks should be contained in a class.  Refactor some day.
@@ -106,15 +119,18 @@ public class Student {
     public static final int _FAMILY_PRACTITIONER_RANK_INDEX = _FAMILY_PRACTITIONER_INDEX - _BEGIN_PRACTICE_RANK_INDEX;
     public static final int _INTERNISTS_RANK_INDEX          = _INTERNISTS_INDEX          - _BEGIN_PRACTICE_RANK_INDEX;
     public static final int _GERIATRICIAN_RANK_INDEX        = _GERIATRICIAN_INDEX        - _BEGIN_PRACTICE_RANK_INDEX;
-    public static final int _RURAL_SETTING_RANK_INDEX       = _RURAL_SETTING_INDEX       - _BEGIN_PRACTICE_RANK_INDEX;
-    public static final int _SUBURBAN_SETTING_RANK_INDEX    = _SUBURBAN_SETTING_INDEX    - _BEGIN_PRACTICE_RANK_INDEX;
-    public static final int _URBAN_SETTING_RANK_INDEX       = _URBAN_SETTING_INDEX       - _BEGIN_PRACTICE_RANK_INDEX;
-    public static final int _UNDERSERVED_RANK_INDEX         = _UNDERSERVED_INDEX         - _BEGIN_PRACTICE_RANK_INDEX;
-    public static final int _numberPracticeFields           = _END_PRACTICE_RANK_INDEX   - _BEGIN_PRACTICE_RANK_INDEX;
+    public static final int _RURAL_SETTING_RANK_INDEX       = _RURAL_SETTING_INDEX       - _BEGIN_SETTING_RANK_INDEX;
+    public static final int _SUBURBAN_SETTING_RANK_INDEX    = _SUBURBAN_SETTING_INDEX    - _BEGIN_SETTING_RANK_INDEX;
+    public static final int _URBAN_SETTING_RANK_INDEX       = _URBAN_SETTING_INDEX       - _BEGIN_SETTING_RANK_INDEX;
+    public static final int _UNDERSERVED_RANK_INDEX         = _UNDERSERVED_INDEX         - _BEGIN_SETTING_RANK_INDEX;
 
-    private static final double _RANKS_WEIGHT   = 0.5;
-    private static final double _GENDER_WEIGHT  = 0.25;
-    private static final double _SPEAKSSPANISH_WEIGHT = 0.25;
+    public static final int _numberPracticeFields           = _END_PRACTICE_RANK_INDEX - _BEGIN_PRACTICE_RANK_INDEX;
+    public static final int _numberSettingFields            = _END_SETTING_RANK_INDEX  - _BEGIN_SETTING_RANK_INDEX;
+
+    private static final double _PRACTICE_WEIGHT      = 0.6;
+    private static final double _SETTING_WEIGHT       = 0.2;
+    private static final double _GENDER_WEIGHT        = 0.2;
+    private static final double _SPEAKSSPANISH_WEIGHT = 0.2;
 
     /**
      * A collection of case-insensitive strings that unambiguously indicate a male student.
@@ -171,7 +187,8 @@ public class Student {
 	try {
 	    _isFemale      = parseGender(fields[_GENDER_INDEX]);
 	    _speaksSpanish = parseLanguages(fields[_LANGUAGES_INDEX]);
-	    _practiceRanks = parsePracticeRanks(Arrays.copyOfRange(fields, _BEGIN_PRACTICE_RANK_INDEX, _END_PRACTICE_RANK_INDEX));
+	    _practiceRanks = parseRanks(Arrays.copyOfRange(fields, _BEGIN_PRACTICE_RANK_INDEX, _END_PRACTICE_RANK_INDEX));
+	    _settingRanks  = parseRanks(Arrays.copyOfRange(fields, _BEGIN_SETTING_RANK_INDEX,  _END_SETTING_RANK_INDEX));
 	    _preMatch      = parsePreMatch(fields[_PRE_MATCHED_INDEX]);
 	    _sufficientForMatching = true;
 	} catch (InsufficientDataException e) {
@@ -200,30 +217,47 @@ public class Student {
 
     public double cross (Preceptor preceptor) {
 
+	Utility.debug(2, String.format("\nCrossing %40s with %40s:", this.getName(), preceptor.getName()));
+
 	// Crossing should not have been requested unless the student and preceptor are pairable.
 	Utility.abortIfFalse(this.pairable() && preceptor.pairable(),
 			     String.format("Tried to pair unpairable student ({0}) and preceptor ({1})",
 					   this.getName(),
 					   preceptor.getName()));
 
-	// The preceptor's mask should be crossed with the inverse of the ranking, since we are aiming for maximization.
-	double rankMatchQuality = 0.0;
+	// The preceptor's masks should be crossed with the inverse ranking (1/r), since we are aiming for maximization.  SFHK: The
+	// use of an inverse (for a ranking $r$, the value is $v = 1/r$) is good, but an exponential inverse would allow the rate of
+	// diminished influence.  Change later.
+	double practiceMatchQuality = 0.0;
 	for (int i = 0; i < _practiceRanks.length; i += 1) {
-	    double maskedValue = (_practiceRanks.length - _practiceRanks[i] + 1) * preceptor.getRankMask(i);
-	    rankMatchQuality += maskedValue;
+	    double maskedValue = (1.0 / _practiceRanks[i]) * preceptor.getPracticeMask(i);
+	    practiceMatchQuality += maskedValue;
+	    Utility.debug(2, String.format("\t\t%d: (1.0 / %d) * %2.4f = %2.4f",
+					   i,
+					   _practiceRanks[i],
+					   preceptor.getPracticeMask(i),
+					   maskedValue));
 	}
+	Utility.debug(2, String.format("\tpracticeMatchQuality = %2.4f", practiceMatchQuality));
+	double settingMatchQuality = 0.0;
+	for (int i = 0; i < _settingRanks.length; i += 1) {
+	    double maskedValue = (1.0 / _settingRanks[i]) * preceptor.getSettingMask(i);
+	    settingMatchQuality += maskedValue;
+	}
+	// Utility.debug(2, String.format("\tsettingMatchQuality  = %2.4f", settingMatchQuality));
 
 	// If there is no gender preference, then it's a good match.  If there is one and the gender does match, it's an even better
 	// match.
 	double genderMatchQuality = 0.0;
 	if (preceptor.hasGenderPreference()) {
-	    if ((preceptor.prefersFemale() && (_isFemale == _GENDER_FEMALE)) ||
-		(!preceptor.prefersFemale()) && (_isFemale == _GENDER_MALE)) {
+	    if ((preceptor.prefersFemale()   && (_isFemale == _GENDER_FEMALE)) ||
+		(!preceptor.prefersFemale()) && (_isFemale == _GENDER_MALE)  ) {
 		genderMatchQuality = 1.0;
 	    }
 	} else {
-	    genderMatchQuality = 0.75;
+	    genderMatchQuality = 0.25;
 	}
+	// Utility.debug(2, String.format("\tgenderMatchQuality  = %2.4f", genderMatchQuality));
 
 	// If spanish-speaking is not required, it's a good match.  If it is required and provided, it's an even better match.
 	double spanishMatchQuality = 0.0;
@@ -232,15 +266,19 @@ public class Student {
 		spanishMatchQuality = 1.0;
 	    }
 	} else {
-	    spanishMatchQuality = 0.75;
+	    spanishMatchQuality = 0.25;
 	}
+	// Utility.debug(2, String.format("\tspanishMatchQuality  = %2.4f", spanishMatchQuality));
 
 	// Combine them all with weights.
-	double matchQuality = ((rankMatchQuality    * _RANKS_WEIGHT) +
-			       (genderMatchQuality  * _GENDER_WEIGHT) +
-			       (spanishMatchQuality * _SPEAKSSPANISH_WEIGHT));
+	double matchQuality = ((practiceMatchQuality * _PRACTICE_WEIGHT     ) +
+			       (settingMatchQuality  * _SETTING_WEIGHT      ) +
+			       (genderMatchQuality   * _GENDER_WEIGHT       ) +
+			       (spanishMatchQuality  * _SPEAKSSPANISH_WEIGHT));
+	Utility.debug(2, String.format("\tmatchQuality        = %2.4f", matchQuality));
 
 	return matchQuality;
+
     }
     // =============================================================================================================================
 
@@ -364,63 +402,45 @@ public class Student {
      * Create an array that will store the ranks, in their indexed order, verifying that each is properly expressed as an integer
      * within the appropriate ranking range, and that each such integer in that range appears exactly once.
      *
-     * @param practiceRanksText The textual representation of the sequence of ranks, one per rank-ordered field.
+     * @param ranksText The textual representation of the sequence of ranks, one per rank-ordered field.
      * @return A sequence of integers that represent the rank ordering of each field, guaranteed to contain one unique rank per
      *         field.
      * @throws InsufficientDataException when the collection of ranks is incorrect or incomplete.
      */
 
-    private static int[] parsePracticeRanks (String[] practiceRanksText) throws InsufficientDataException {
+    private static int[] parseRanks (String[] ranksText) throws InsufficientDataException {
 
-	// Sanity check.
-	Utility.abortIfFalse(practiceRanksText.length == _numberPracticeFields,
-			     "Student.parsePracticeRanks() passed wrong number of text fields: " +
-			     practiceRanksText.length +
-			     " vs. " + 
-			     _numberPracticeFields);
-
-	// Create both a space to store the converted ranks as well as a space to record in which position each rank is found.  The
-	// latter is initialized to -1 because that is not a valid index, and thus marks the given rank as not yet encountered in
-	// the processing of each rank specified.
-	int[] practiceRanks = new int[_numberPracticeFields];
-	int[] ranksUsedPosition = new int[_numberPracticeFields];
-	for (int i = 0; i < _numberPracticeFields; i += 1) {
-	    ranksUsedPosition[i] = -1;
-	}
-
-	// Now visit each rank.  First convert it from a string to a integer, validating that the given rank is:
-	//   (a) Actually convertable to an integer;
-	//   (b) A valid rank from 1 to _numberPracticeFields;
-	//   (c) Used in exactly one place in the rank listing.
-	for (int i = 0; i < _numberPracticeFields; i += 1) {
+	// Create both a space to store the given ranks, which must be converted into integer values.
+	int[] givenRanks = new int[ranksText.length];
+	for (int i = 0; i < ranksText.length; i += 1) {
 	    try {
-		practiceRanks[i] = Integer.parseInt(practiceRanksText[i]);
+		givenRanks[i] = Integer.parseInt(ranksText[i]);
 	    } catch (NumberFormatException e) {
 		throw new InsufficientDataException("Couldn't parse rank value " +
-						    practiceRanksText[i] +
+						    ranksText[i] +
 						    " at position " +
 						    i);
 	    }
-	    if ((practiceRanks[i] < 1) || (practiceRanks[i] > _numberPracticeFields)) {
-		throw new InsufficientDataException("Rank " + practiceRanks[i] + " at position " + i + " is out of range");
+	}
+
+	// Now construct the adjusted ranks, where the values given are turned into values from 1 to $n$, where $n$ is the number of
+	// entries.  Figure out the order by selecting the minimal remaining entry so far.
+	int[] ranks = new int[givenRanks.length];
+	for (int i = 0; i < givenRanks.length; i += 1) {
+	    int minIndex = 0;
+	    for (int j = 0; j < givenRanks.length; j += 1) {
+		if (givenRanks[j] < givenRanks[minIndex]) {
+		    minIndex = j;
+		}
 	    }
-	    int currentRank = practiceRanks[i];
-	    int rankPosition = currentRank - 1;
-	    if (ranksUsedPosition[rankPosition] != -1) {
-		throw new InsufficientDataException("Rank " +
-						    currentRank +
-						    " used in both positions " +
-						    ranksUsedPosition[rankPosition] +
-						    " and " +
-						    i);
-	    }
-	    ranksUsedPosition[rankPosition] = i;
+	    ranks[minIndex] = i + 1;
+	    givenRanks[minIndex] = Integer.MAX_VALUE;
 	}
 
 	// All converted and validated, so return it.
-	return practiceRanks;
+	return ranks;
 
-    } // parsePracticeRanks()
+    } // parseRanks()
     // =============================================================================================================================
 
 
@@ -477,6 +497,7 @@ public class Student {
     // =============================================================================================================================
 
 
+
     // =============================================================================================================================
     public String preMatch () {
 	return _preMatch;
@@ -486,8 +507,17 @@ public class Student {
 
 
     // =============================================================================================================================
-    public void match (Preceptor preceptor) {
-	_preceptor = preceptor;
+    public double getMatchQuality () {
+	return _matchQuality;
+    }
+    // =============================================================================================================================
+
+
+
+    // =============================================================================================================================
+    public void match (Preceptor preceptor, double quality) {
+	_preceptor    = preceptor;
+	_matchQuality = quality;
     }
     // =============================================================================================================================
 

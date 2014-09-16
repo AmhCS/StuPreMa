@@ -37,10 +37,16 @@ public class Preceptor {
     private String   _firstName;
 
     /**
-     * A array of weights, used the mask the value of certain traits to this preceptor.
+     * A array of weights, used the mask the value of the practice type of this preceptor when matched to a given student.
      * @see Student._practiceRanks
      */
-    private double[] _rankMask;
+    private double[] _practiceMask;
+
+    /**
+     * A array of weights, used the mask the value of the practice type of this preceptor when matched to a given student.
+     * @see Student._settingRanks
+     */
+    private double[] _settingMask;
 
     /** Whether this preceptor has any preference for one gender or the other. */
     private boolean  _genderPreference;
@@ -68,13 +74,13 @@ public class Preceptor {
     private String   _preMatch;
 
     /** The <code>Student</code> to whom this student is matched (if any). */
-    private Student _student;
+    private Student  _student;
 
     /**
      * Whether sufficient information for the fields above is provided to properly match this student with a <code>Preceptor</code>.
      * @see Student.cross
      */
-    private boolean _sufficientForMatching;
+    private boolean  _sufficientForMatching;
 
     /**
      * A boolean constant to represent a male.
@@ -88,18 +94,18 @@ public class Preceptor {
      */
     private static final boolean _GENDER_FEMALE = true;
 
-    private static final int _LAST_NAME_INDEX           = 0;
-    private static final int _FIRST_NAME_INDEX          = 1;
-    private static final int _PRACTICE_TYPES_INDEX      = 2;
-    private static final int _LOCATION_INDEX            = 3;
-    private static final int _PRACTICE_REGION_INDEX     = 4;
-    private static final int _GENDER_PREFERENCE_INDEX   = 5;
-    private static final int _LANGUAGES_INDEX           = 6;
-    private static final int _PREFERRED_DAY_INDEX       = 7;
-    private static final int _SECONDARY_DAY_INDEX       = 8;
-    private static final int _COMMENTS_INDEX            = 9;
-    private static final int _PRE_MATCHED_INDEX         = 10;
-    private static final int _numberFields              = 11;
+    private static final int _LAST_NAME_INDEX         = 0;
+    private static final int _FIRST_NAME_INDEX        = 1;
+    private static final int _PRACTICE_TYPES_INDEX    = 2;
+    private static final int _LOCATION_INDEX          = 3;
+    private static final int _PRACTICE_SETTING_INDEX  = 4;
+    private static final int _GENDER_PREFERENCE_INDEX = 5;
+    private static final int _LANGUAGES_INDEX         = 6;
+    private static final int _PREFERRED_DAY_INDEX     = 7;
+    private static final int _SECONDARY_DAY_INDEX     = 8;
+    private static final int _COMMENTS_INDEX          = 9;
+    private static final int _PRE_MATCHED_INDEX       = 10;
+    private static final int _numberFields            = 11;
 
     /**
      * A collection of case-insensitive strings that unambiguously indicate a male student.
@@ -156,7 +162,7 @@ public class Preceptor {
 	_firstName                  = fields[_FIRST_NAME_INDEX];
 	_practiceType               = fields[_PRACTICE_TYPES_INDEX];
 	_location                   = fields[_LOCATION_INDEX];
-	String practiceRegionText   = fields[_PRACTICE_REGION_INDEX];
+	String settingText   = fields[_PRACTICE_SETTING_INDEX];
 	String genderPreferenceText = fields[_GENDER_PREFERENCE_INDEX];
 	String languagesText        = fields[_LANGUAGES_INDEX];
 	_dayOfWeek                  = fields[_PREFERRED_DAY_INDEX];
@@ -164,7 +170,8 @@ public class Preceptor {
 
 	// Construct a ranking mask from the information given.
 	try {
-	    _rankMask          = parsePracticeRanks(_practiceType, practiceRegionText);
+	    _practiceMask          = parsePractice(_practiceType, settingText);
+	    _settingMask           = parseSetting(settingText);
 	    _genderPreference  = parseGenderPreference(genderPreferenceText);
 	    if (_genderPreference) {
 		_prefersFemale = parseGender(genderPreferenceText);
@@ -360,21 +367,18 @@ public class Preceptor {
     // =============================================================================================================================
     /**
      * Create an <i>array mask</i> that, when crossed with a <code>Student</code> ranking array, yields an array that indicates the
-     * quality of those aspects of the match.
+     * quality the match with respect to practice type.
      *
      * @param practiceTypesText The kind of medicine practiced (e.g., family, pediatrics).
-     * @param practiceRegionText The text that indicates in the geographic type of the practice (e.g., urban, rural).  It also
-     *        happens to contain an indication of the percentage of the practice that is pediatric.  (This information should have
-     *        been in its own field, but it is combined here for now.)
+     * @param settingText The text that describes both the setting of the practice (not handled here) and the percentage of
+     *                    pediatrics associated with the preceptor.  SFHK: This combination is stupid; change it next year.
      * @return An <i>array mask</i> that matches the ranking of a <code>Student</code> that, when crossed, yields the quality of the
      *         match.
      * @throws InsufficientDataException when the various fields provided do not yield a clear indication of how to construct the
      *         ranks mask.
      */
 
-    private static double[] parsePracticeRanks (String practiceTypesText,
-						String practiceRegionText)
-	throws InsufficientDataException {
+    private static double[] parsePractice (String practiceTypesText, String settingText) throws InsufficientDataException {
 
 	// Create a space to store the rank mask.
 	double[] rankMask = new double[Student._numberPracticeFields];
@@ -387,52 +391,34 @@ public class Preceptor {
 	//   (4) FP/Internist
 	//   (5) Pedi/FP
 	//   (6) Internist/Geriatrician
-	//   (7) Rural/Care of the Underserved
-	//   The last is quite the annoying special case.  Match it first to manage it separately.
 	String loweredPracticeTypes = practiceTypesText.toLowerCase();
-	if (loweredPracticeTypes.contains("underserved")) {
-	    rankMask[Student._UNDERSERVED_RANK_INDEX] = 1.0;
-	} else if (practiceTypesText.equalsIgnoreCase("FP")) {
+	if (practiceTypesText.equalsIgnoreCase("FP")) {
 	    rankMask[Student._FAMILY_PRACTITIONER_RANK_INDEX] = 1.0;
-	} else if (practiceTypesText.equalsIgnoreCase("Internist")) {
-	    rankMask[Student._INTERNISTS_RANK_INDEX] = 1.0;
-	} else if (practiceTypesText.equalsIgnoreCase("Pedi")) {
-	    rankMask[Student._PEDIATRICIAN_RANK_INDEX] = 1.0;
-	} else if (practiceTypesText.equalsIgnoreCase("FP/Internist")) {
-	    rankMask[Student._FAMILY_PRACTITIONER_RANK_INDEX] = 0.5;
-	    rankMask[Student._INTERNISTS_RANK_INDEX] = 0.5;
-	} else if (practiceTypesText.equalsIgnoreCase("Pedi/FP")) {
-	    rankMask[Student._PEDIATRICIAN_RANK_INDEX] = 0.5;
-	    rankMask[Student._FAMILY_PRACTITIONER_RANK_INDEX] = 0.5;
-	} else if (practiceTypesText.equalsIgnoreCase("Interist/Geriatrician")) {
-	    rankMask[Student._INTERNISTS_RANK_INDEX] = 0.5;
-	    rankMask[Student._GERIATRICIAN_RANK_INDEX] = 0.5;
+	} else if (practiceTypesText.equalsIgnoreCase("IM")) {
+	    rankMask[Student._INTERNISTS_RANK_INDEX]          = 1.0;
+	} else if (practiceTypesText.equalsIgnoreCase("Ped")) {
+	    rankMask[Student._PEDIATRICIAN_RANK_INDEX]        = 1.0;
+	} else if (practiceTypesText.equalsIgnoreCase("Geriatrician")) {
+	    rankMask[Student._GERIATRICIAN_RANK_INDEX]        = 1.0;
+	} else if (practiceTypesText.equalsIgnoreCase("FP/IM")) {
+	    rankMask[Student._FAMILY_PRACTITIONER_RANK_INDEX] = 0.75;
+	    rankMask[Student._INTERNISTS_RANK_INDEX]          = 0.75;
+	} else if (practiceTypesText.equalsIgnoreCase("Ped/FP")) {
+	    rankMask[Student._PEDIATRICIAN_RANK_INDEX]        = 0.75;
+	    rankMask[Student._FAMILY_PRACTITIONER_RANK_INDEX] = 0.75;
+	} else if (practiceTypesText.equalsIgnoreCase("IM/Geriatrician")) {
+	    rankMask[Student._INTERNISTS_RANK_INDEX]          = 0.75;
+	    rankMask[Student._GERIATRICIAN_RANK_INDEX]        = 0.75;
 	}
 
-	// Second: The practice region must be split from its ancillary information regarding the percentage of pediatrics; that
-	// practice region must then be parsed.  Be aware that some regions are not specified; furthermore, sometimes a region is
-	// specified without a percentage on peds.
-	String[] practiceRegionSplit = practiceRegionText.split(" ");
-	if (practiceRegionSplit.length >= 1) {
-	    String region = practiceRegionSplit[0];
-	    if (region.equalsIgnoreCase("Urban")) {
-		rankMask[Student._URBAN_SETTING_RANK_INDEX] = 1.0;
-	    } else if (region.equalsIgnoreCase("Suburban")) {
-		rankMask[Student._SUBURBAN_SETTING_RANK_INDEX] = 1.0;
-	    } else if (region.equalsIgnoreCase("Rural")) {
-		rankMask[Student._RURAL_SETTING_RANK_INDEX] = 1.0;
-	    } else if (region.equalsIgnoreCase("Suburban/Urban")) {
-		rankMask[Student._SUBURBAN_SETTING_RANK_INDEX] = 0.5;
-		rankMask[Student._URBAN_SETTING_RANK_INDEX] = 0.5;
-	    }
-	}
-
-	// Third: Handle the percentage pediatrics, if it's there.  It could have one of the following formats:
+	// Second: Handle the percentage pediatrics, if it's there and this isn't a straight pediatrician.  It could have one of the
+	// following formats:
 	//   (1) x%
 	//   (2) x-y%
-	//   Parse both; average the latter if applicable.
-	if (practiceRegionSplit.length >= 2) {
-	    String percentPeds = practiceRegionSplit[1];
+	// Parse both; average the latter if applicable.
+	String[] settingSplit = settingText.split(" ");
+	if ((settingSplit.length >= 2) && (rankMask[Student._PEDIATRICIAN_RANK_INDEX] == 0.0)) {
+	    String percentPeds = settingSplit[1];
 	    Pattern pattern = Pattern.compile("(\\d+){1}-(\\d+)?%", Pattern.CASE_INSENSITIVE);
 	    Matcher matcher = pattern.matcher(percentPeds);
 	    if (!matcher.matches()) {
@@ -452,7 +438,65 @@ public class Preceptor {
 
 	return rankMask;
 
-    } // parsePracticeRanks()
+    }
+    // =============================================================================================================================
+
+
+
+    // =============================================================================================================================
+    /**
+     * Create an <i>array mask</i> that, when crossed with a <code>Student</code> ranking array, yields an array that indicates the
+     * quality the match with respect to the practice's setting (e.g., <i>urban</i>, <i>rural</i>).
+     *
+     * @param settingText The text that indicates in the geographic type of the practice (e.g., urban, rural).  It also
+     *        happens to contain an indication of the percentage of the practice that is pediatric.  (This information should have
+     *        been in its own field, but it is combined here for now.)
+     * @return An <i>array mask</i> that matches the ranking of a <code>Student</code> that, when crossed, yields the quality of the
+     *         match.
+     * @throws InsufficientDataException when the various fields provided do not yield a clear indication of how to construct the
+     *         ranks mask.
+     */
+    private static double[] parseSetting (String settingText) throws InsufficientDataException {
+
+	// Create the rank mask.
+	double[] rankMask = new double[Student._numberSettingFields];
+
+	// The setting must be split from its ancillary information regarding the percentage of pediatrics; that setting must then
+	// be parsed.
+	String[] settingSplit = settingText.split(" ");
+	if (settingSplit.length >= 1) {
+	    String setting = settingSplit[0];
+	    if (setting.equalsIgnoreCase("Urban")) {
+		rankMask[Student._URBAN_SETTING_RANK_INDEX]    = 1.0;
+	    } else if (setting.equalsIgnoreCase("Suburban")) {
+		rankMask[Student._SUBURBAN_SETTING_RANK_INDEX] = 1.0;
+	    } else if (setting.equalsIgnoreCase("Rural")) {
+		rankMask[Student._RURAL_SETTING_RANK_INDEX]    = 1.0;
+	    } else if (setting.equalsIgnoreCase("Underserved")) {
+		rankMask[Student._UNDERSERVED_RANK_INDEX]      = 1.0;
+	    } else if (setting.equalsIgnoreCase("Urban/Underserved")    || setting.equalsIgnoreCase("Underserved/Urban")) {
+		rankMask[Student._UNDERSERVED_RANK_INDEX]      = 0.5;
+		rankMask[Student._URBAN_SETTING_RANK_INDEX]    = 0.5;
+	    } else if (setting.equalsIgnoreCase("Suburban/Underserved") || setting.equalsIgnoreCase("Underserved/Suburban")) {
+		rankMask[Student._UNDERSERVED_RANK_INDEX]      = 0.5;
+		rankMask[Student._SUBURBAN_SETTING_RANK_INDEX] = 0.5;
+	    } else if (setting.equalsIgnoreCase("Rural/Underserved")    || setting.equalsIgnoreCase("Underserved/Rural")) {
+		rankMask[Student._UNDERSERVED_RANK_INDEX]      = 0.5;
+		rankMask[Student._RURAL_SETTING_RANK_INDEX]    = 0.5;
+	    } else if (setting.equalsIgnoreCase("Suburban/Urban")       || setting.equalsIgnoreCase("Urban/Suburban")) {
+		rankMask[Student._SUBURBAN_SETTING_RANK_INDEX] = 0.5;
+		rankMask[Student._URBAN_SETTING_RANK_INDEX]    = 0.5;
+	    } else if (setting.equalsIgnoreCase("Suburban/Rural")       || setting.equalsIgnoreCase("Rural/Suburban")) {
+		rankMask[Student._SUBURBAN_SETTING_RANK_INDEX] = 0.5;
+		rankMask[Student._RURAL_SETTING_RANK_INDEX]    = 0.5;
+	    } else {
+		Utility.warning("Unable to parse setting = " + setting);
+	    }
+	}
+
+	return rankMask;
+
+    } // parseSetting()
     // =============================================================================================================================
 
 
@@ -534,8 +578,16 @@ public class Preceptor {
 
 
     // =============================================================================================================================
-    public double getRankMask (int position) {
-	return _rankMask[position];
+    public double getPracticeMask (int position) {
+	return _practiceMask[position];
+    }
+    // =============================================================================================================================
+
+
+
+    // =============================================================================================================================
+    public double getSettingMask (int position) {
+	return _settingMask[position];
     }
     // =============================================================================================================================
 
